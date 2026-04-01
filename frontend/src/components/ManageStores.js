@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, message, Tag } from 'antd';
-import { PlusOutlined, ShopOutlined } from '@ant-design/icons';
-import { getStores, createStore } from '../services/api';
+import { Table, Button, Modal, Form, Input, message, Tag, Popconfirm } from 'antd';
+import { PlusOutlined, ShopOutlined, DeleteOutlined } from '@ant-design/icons';
+import { getStores, createStore, deleteStore } from '../services/api';
 
 const ManageStores = () => {
     const [data, setData] = useState([]);
@@ -27,6 +27,16 @@ const ManageStores = () => {
         } catch (e) { message.error('Lỗi'); }
     };
 
+    const handleDelete = async (storeId) => {
+        try {
+            await deleteStore(storeId);
+            message.success('Đã xóa cửa hàng');
+            fetchData();
+        } catch (e) {
+            message.error('Lỗi khi xóa cửa hàng');
+        }
+    };
+
     const columns = [
         { title: 'Mã', dataIndex: 'store_code', render: (v) => <Tag color="blue">{v}</Tag> },
         { title: 'Tên cửa hàng', dataIndex: 'store_name', render: (v) => <b>{v}</b> },
@@ -34,6 +44,22 @@ const ManageStores = () => {
         { title: 'SĐT', dataIndex: 'phone' },
         { title: 'Quản lý', dataIndex: 'manager_name' },
         { title: 'Dược sĩ', dataIndex: 'pharmacist_name' },
+        {
+            title: 'Thao tác',
+            key: 'actions',
+            render: (_, record) => (
+                <Popconfirm
+                    title="Bạn có chắc muốn xóa cửa hàng này?"
+                    onConfirm={() => handleDelete(record.store_id)}
+                    okText="Xóa"
+                    cancelText="Hủy"
+                >
+                    <Button type="link" danger icon={<DeleteOutlined />}>
+                        Xóa
+                    </Button>
+                </Popconfirm>
+            ),
+        },
     ];
 
     return (

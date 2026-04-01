@@ -13,6 +13,7 @@ import ManageStores from './components/ManageStores';
 import ManageEmployees from './components/ManageEmployees';
 import ManageInventory from './components/ManageInventory';
 import ManagePrices from './components/ManagePrices';
+import ManageMedicalSupplies from './components/ManageMedicalSupplies';
 import './App.css';
 
 function App() {
@@ -57,6 +58,7 @@ function App() {
             case 'employees': return <ManageEmployees user={user} />;
             case 'inventory': return <ManageInventory />;
             case 'prices': return <ManagePrices />;
+            case 'medical-supplies': return <ManageMedicalSupplies />;
             default: return <Dashboard user={user} />;
         }
     };

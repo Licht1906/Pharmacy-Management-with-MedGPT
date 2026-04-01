@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Form, Input, InputNumber, Button, Select,
     Table, message, Card, Tag, Divider
@@ -7,7 +7,7 @@ import {
     ShoppingCartOutlined, PlusOutlined,
     DeleteOutlined, CheckCircleOutlined
 } from '@ant-design/icons';
-import { createOrder, searchDrugs } from '../services/api';
+import { createOrder, searchDrugs, getStores } from '../services/api';
 
 const OrderForm = () => {
     const [form] = Form.useForm();
@@ -16,15 +16,36 @@ const OrderForm = () => {
     const [searching, setSearching] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [orderResult, setOrderResult] = useState(null);
+    const [stores, setStores] = useState([]);
+
+    // Fetch stores on component mount
+    useEffect(() => {
+        const fetchStores = async () => {
+            try {
+                const result = await getStores();
+                setStores(result.data || []);
+            } catch (e) {
+                message.error('Lỗi tải danh sách cửa hàng');
+            }
+        };
+        fetchStores();
+    }, []);
 
     // Tìm thuốc
     const handleSearch = async (value) => {
         if (!value || value.length < 2) return;
+        const storeId = form.getFieldValue('store_id');
+        if (!storeId) {
+            message.warning('Vui lòng chọn cửa hàng trước khi tìm thuốc');
+            return;
+        }
+
         setSearching(true);
         try {
-            const result = await searchDrugs(value);
+            const result = await searchDrugs(value, storeId);
             if (result.found) {
-                setSearchResults(result.results);
+                // Lọc thuốc có tồn kho > 0 để tránh hiển thị thuốc hết hàng tại cửa hàng đã chọn
+                setSearchResults(result.results.filter(d => d.total_quantity > 0));
             } else {
                 setSearchResults([]);
             }
@@ -48,7 +69,7 @@ const OrderForm = () => {
             strength: drug.strength,
             price: drug.price,
             total_quantity: drug.total_quantity,
-            brand_drug_id: null,
+            brand_drug_id: drug.brand_drug_id,
             quantity: 1,
         }]);
     };
@@ -85,7 +106,15 @@ const OrderForm = () => {
             setItems([]);
             form.resetFields();
         } catch (e) {
-            message.error(e.response?.data?.detail || 'Lỗi tạo đơn hàng');
+            let errorMsg = 'Lỗi tạo đơn hàng';
+            if (e.response?.data?.detail) {
+                if (Array.isArray(e.response.data.detail)) {
+                    errorMsg = e.response.data.detail.map(err => err.msg || JSON.stringify(err)).join(', ');
+                } else {
+                    errorMsg = e.response.data.detail;
+                }
+            }
+            message.error(errorMsg);
         }
         setSubmitting(false);
     };
@@ -160,10 +189,12 @@ const OrderForm = () => {
                         </Form.Item>
                         <Form.Item label="Cửa hàng" name="store_id"
                             rules={[{ required: true, message: 'Chọn cửa hàng' }]}>
-                            <Select placeholder="Chọn cửa hàng">
-                                <Select.Option value={1}>CH001 - Nhà thuốc Trung tâm</Select.Option>
-                                <Select.Option value={2}>CH002 - Nhà thuốc Bình Thạnh</Select.Option>
-                                <Select.Option value={3}>CH003 - Nhà thuốc Gò Vấp</Select.Option>
+                            <Select placeholder="Chọn cửa hàng" showSearch optionFilterProp="children">
+                                {stores.map(s => (
+                                <Select.Option key={s.store_id} value={s.store_id}>
+                                    {s.store_name}
+                                </Select.Option>
+                                ))}
                             </Select>
                         </Form.Item>
                         <Form.Item label="Ghi chú" name="notes">

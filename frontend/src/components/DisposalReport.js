@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Tag, Card, Select, Statistic, Row, Col, Button } from 'antd';
+import { Table, Tag, Card, Select, Statistic, Row, Col, Button, Popconfirm, message } from 'antd';
 import {
     WarningOutlined, ReloadOutlined,
-    ExclamationCircleOutlined, CloseCircleOutlined
+    ExclamationCircleOutlined, CloseCircleOutlined, DeleteOutlined
 } from '@ant-design/icons';
-import { getDisposalReport } from '../services/api';
+import { getDisposalReport, getStores, disposeDrugs } from '../services/api';
 
 const DisposalReport = () => {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [storeId, setStoreId] = useState(null);
+    const [stores, setStores] = useState([]);
 
     const fetchReport = async () => {
         setLoading(true);
@@ -22,9 +23,42 @@ const DisposalReport = () => {
         setLoading(false);
     };
 
+    const fetchAllStores = async () => {
+        try {
+            const res = await getStores();
+            if (res && res.data) {
+                setStores(res.data);
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    useEffect(() => {
+        fetchAllStores();
+    }, []);
+
     useEffect(() => {
         fetchReport();
     }, [storeId]);
+
+    const handleDispose = async (inventoryIds) => {
+        if (!inventoryIds || inventoryIds.length === 0) return;
+        setLoading(true);
+        try {
+            const res = await disposeDrugs(inventoryIds);
+            if (res.success) {
+                message.success(res.message);
+                fetchReport();
+            } else {
+                message.error(res.message || 'Lỗi thanh lý');
+            }
+        } catch (e) {
+            console.error(e);
+            message.error('Có lỗi xảy ra khi thanh lý');
+            setLoading(false);
+        }
+    };
 
     const columns = [
         {
@@ -56,6 +90,20 @@ const DisposalReport = () => {
             title: 'Thiệt hại', dataIndex: 'estimated_loss',
             render: (v) => <span style={{ color: '#f5222d' }}>{v?.toLocaleString()}đ</span>
         },
+        {
+            title: 'Hành động',
+            key: 'action',
+            render: (_, record) => (
+                <Popconfirm
+                    title="Xác nhận thanh lý lô thuốc này?"
+                    onConfirm={() => handleDispose([record.inventory_id])}
+                    okText="Thanh lý"
+                    cancelText="Hủy"
+                >
+                    <Button type="primary" danger size="small">Thanh lý</Button>
+                </Popconfirm>
+            )
+        }
     ];
 
     const allItems = [
@@ -69,16 +117,22 @@ const DisposalReport = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
                 <h2><WarningOutlined style={{ color: '#faad14' }} /> Báo Cáo Thuốc Cần Thanh Lý</h2>
                 <div style={{ display: 'flex', gap: 8 }}>
-                    <Select
-                        placeholder="Tất cả cửa hàng"
-                        allowClear
-                        onChange={setStoreId}
-                        style={{ width: 250 }}
-                    >
-                        <Select.Option value={1}>CH001 - Nhà thuốc Trung tâm</Select.Option>
-                        <Select.Option value={2}>CH002 - Nhà thuốc Bình Thạnh</Select.Option>
-                        <Select.Option value={3}>CH003 - Nhà thuốc Gò Vấp</Select.Option>
+                    <Select placeholder="Tất cả cửa hàng" allowClear onChange={setStoreId} style={{ width: 250 }}>
+                        {stores.map(s => <Select.Option key={s.store_id} value={s.store_id}>{s.store_code} - {s.store_name}</Select.Option>)}
                     </Select>
+                    <Popconfirm
+                        title={`Thanh lý ${allItems.length} lô thuốc này?`}
+                        onConfirm={() => {
+                            const allIds = allItems.map(item => item.inventory_id).filter(id => id);
+                            handleDispose(allIds);
+                        }}
+                        okText="Thanh lý tất cả"
+                        cancelText="Hủy"
+                    >
+                        <Button danger icon={<DeleteOutlined />} disabled={allItems.length === 0}>
+                            Thanh lý tất cả
+                        </Button>
+                    </Popconfirm>
                     <Button icon={<ReloadOutlined />} onClick={fetchReport}>
                         Làm mới
                     </Button>

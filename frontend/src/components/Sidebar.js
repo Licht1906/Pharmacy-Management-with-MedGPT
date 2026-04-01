@@ -28,6 +28,7 @@ const Sidebar = ({ currentPage, onPageChange, user, onLogout }) => {
             children: [
                 { key: 'generic-drugs', icon: <MedicineBoxOutlined />, label: 'Thuốc Gốc' },
                 { key: 'brand-drugs', icon: <DatabaseOutlined />, label: 'Biệt Dược' },
+                { key: 'medical-supplies', icon: <MedicineBoxOutlined />, label: 'Vật Dụng Y Tế' },
                 { key: 'manufacturers', icon: <BankOutlined />, label: 'Nhà Sản Xuất' },
                 { key: 'stores', icon: <ShopOutlined />, label: 'Cửa Hàng' },
                 { key: 'employees', icon: <TeamOutlined />, label: 'Nhân Viên' },

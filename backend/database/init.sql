@@ -169,6 +169,27 @@ CREATE INDEX idx_inventory_store_drug ON drug_inventory(store_id, brand_drug_id)
 
 COMMENT ON TABLE drug_inventory IS 'Tồn kho theo lô - FEFO: hết hạn trước bán trước';
 
+CREATE TABLE product_inventory (
+    inventory_id        SERIAL PRIMARY KEY,
+    product_id          INT REFERENCES other_products(product_id),
+    store_id            INT REFERENCES stores(store_id),
+    batch_number        VARCHAR(100) NOT NULL,       -- Số lô
+    manufacturing_date  DATE,
+    expiry_date         DATE NOT NULL,               -- *** HẠN SỬ DỤNG ***
+    quantity            INT NOT NULL DEFAULT 0,
+    import_date         DATE NOT NULL,
+    supplier_info       TEXT,
+    status              VARCHAR(20) DEFAULT 'ACTIVE',
+    -- ACTIVE: đang bán, EXPIRED: hết hạn, DISPOSED: đã thanh lý
+    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_product_inventory_expiry ON product_inventory(expiry_date ASC);
+CREATE INDEX idx_product_inventory_store_product ON product_inventory(store_id, product_id);
+
+COMMENT ON TABLE product_inventory IS 'Tồn kho sản phẩm y tế theo lô - FEFO: hết hạn trước bán trước';
+
 CREATE TABLE customers (
     customer_id         SERIAL PRIMARY KEY,
     full_name           VARCHAR(200),
@@ -417,6 +438,217 @@ INSERT INTO customers (full_name, phone, allergy_info) VALUES
 ('Nguyễn Văn Hùng', '0901234567', 'Dị ứng Penicillin'),
 ('Trần Thị Mai', '0912345678', NULL),
 ('Lê Hoàng Nam', '0923456789', 'Dị ứng Aspirin');
+
+INSERT INTO manufacturers (manufacturer_name, abbreviation, country, address, phone, email) VALUES
+('Boston Pharma', 'BOS', 'Việt Nam', 'KCN Quang Minh, Hà Nội', '024-3584-1122', 'info@bostonpharma.com.vn'),
+('Domesco', 'DMC', 'Việt Nam', '66 Quốc lộ 30, Cao Lãnh, Đồng Tháp', '0277-3851-278', 'info@domesco.com'),
+('Vidipha', 'VDP', 'Việt Nam', '184/2 Lê Văn Sỹ, Phú Nhuận, TP.HCM', '028-3844-4488', 'info@vidipha.com.vn'),
+('DKSH Pharma', 'DKS', 'Thụy Sĩ', 'Wiesenstrasse 8, Zurich, Switzerland', NULL, 'info@dksh.com'),
+('Sandoz', 'SDZ', 'Thụy Sĩ', 'Lichtstrasse 35, Basel, Switzerland', NULL, 'contact@sandoz.com');
+
+INSERT INTO generic_drugs 
+(generic_name, description, usage_info, drug_category, requires_prescription)
+VALUES
+('Azithromycin', 'Kháng sinh nhóm Macrolide', 'Nhiễm khuẩn hô hấp, da, tai mũi họng', 'Kháng sinh', TRUE),
+('Metformin', 'Thuốc điều trị tiểu đường type 2', 'Giảm đường huyết', 'Tiểu đường', TRUE),
+('Amlodipine', 'Thuốc chẹn kênh canxi', 'Điều trị tăng huyết áp', 'Tim mạch', TRUE),
+('Losartan', 'Thuốc chẹn thụ thể Angiotensin II', 'Điều trị tăng huyết áp', 'Tim mạch', TRUE),
+('Vitamin C', 'Vitamin tăng sức đề kháng', 'Phòng và điều trị thiếu vitamin C', 'Vitamin', FALSE),
+('Calcium Carbonate', 'Bổ sung canxi', 'Phòng loãng xương', 'Vitamin - Khoáng chất', FALSE),
+('Diclofenac', 'NSAID giảm đau kháng viêm mạnh', 'Đau khớp, viêm khớp', 'Kháng viêm', TRUE),
+('Salbutamol', 'Thuốc giãn phế quản', 'Hen suyễn, COPD', 'Hô hấp', TRUE);
+
+INSERT INTO substitution_groups (group_name, description, therapeutic_class) VALUES
+('Nhóm thuốc tim mạch', 'Thuốc điều trị tăng huyết áp và bệnh tim', 'Tim mạch'),
+('Nhóm vitamin', 'Vitamin và khoáng chất bổ sung', 'Vitamin'),
+('Nhóm thuốc hô hấp', 'Thuốc điều trị hen suyễn và bệnh phổi', 'Hô hấp');
+
+INSERT INTO brand_drugs
+(drug_code, brand_name, generic_drug_id, manufacturer_id, dosage_form, strength, unit, packaging)
+VALUES
+
+-- Azithromycin
+('ANT-AZI-TAB-500MG-PFZ-001','Zithromax',6,5,'Viên nén','500mg','Viên','Hộp 3 viên'),
+('ANT-AZI-TAB-500MG-STL-001','Azithromycin Stella',6,7,'Viên nén','500mg','Viên','Hộp 3 viên'),
+
+-- Metformin
+('DIA-MET-TAB-500MG-ABT-001','Glucophage',7,6,'Viên nén','500mg','Viên','Hộp 5 vỉ x 10 viên'),
+
+-- Amlodipine
+('CAR-AML-TAB-5MG-PFZ-001','Norvasc',8,5,'Viên nén','5mg','Viên','Hộp 3 vỉ x 10 viên'),
+
+-- Losartan
+('CAR-LOS-TAB-50MG-SNF-001','Cozaar',9,3,'Viên nén','50mg','Viên','Hộp 3 vỉ x 10 viên'),
+
+-- Vitamin C
+('VIT-VTC-TAB-500MG-TRP-001','Vitamin C Traphaco',10,8,'Viên nén','500mg','Viên','Hộp 10 vỉ x 10 viên'),
+
+-- Calcium
+('VIT-CAL-TAB-500MG-IMX-001','Calcium Imexpharm',11,9,'Viên nén','500mg','Viên','Hộp 6 vỉ x 10 viên'),
+
+-- Diclofenac
+('ANP-DIC-TAB-50MG-DMC-001','Diclofenac Domesco',12,12,'Viên nén','50mg','Viên','Hộp 10 vỉ'),
+
+-- Salbutamol
+('RES-SAL-INH-100MCG-GSK-001','Ventolin',13,4,'Xịt hít','100mcg','Bình','Bình 200 liều');
+
+INSERT INTO stores (store_code, store_name, address, phone) VALUES
+('CH004', 'Nhà thuốc Thủ Đức', '123 Võ Văn Ngân, TP.Thủ Đức, TP.HCM', '0284-1234-567'),
+('CH005', 'Nhà thuốc Quận 7', '88 Nguyễn Thị Thập, Q.7, TP.HCM', '0285-2222-999'),
+('CH006', 'Nhà thuốc Tân Bình', '55 Cộng Hòa, Q.Tân Bình, TP.HCM', '0286-1111-888');
+
+INSERT INTO employees (employee_code, full_name, store_id, role, username, password_hash) VALUES
+('NV005','Nguyễn Minh Tuấn',4,'PHARMACIST','tuan_nm','$2b$12$hash5'),
+('NV006','Trần Thị Lan',5,'STAFF','lan_tt','$2b$12$hash6'),
+('NV007','Phạm Văn Long',6,'MANAGER','long_pv','$2b$12$hash7');
+
+INSERT INTO drug_prices (brand_drug_id, cost_price, selling_price, effective_date) VALUES
+(14, 45000, 75000, '2024-01-01'),
+(15, 30000, 55000, '2024-01-01'),
+(16, 2000, 4000, '2024-01-01'),
+(17, 3000, 6000, '2024-01-01'),
+(18, 1500, 3000, '2024-01-01'),
+(19, 1000, 2500, '2024-01-01'),
+(20, 1200, 2800, '2024-01-01'),
+(21, 60000, 90000, '2024-01-01');
+
+INSERT INTO drug_inventory
+(brand_drug_id, store_id, batch_number, manufacturing_date, expiry_date, quantity, import_date)
+VALUES
+(14,1,'AZI-2024-001','2024-01-01','2026-01-01',200,'2024-03-01'),
+(15,2,'AZI-2024-002','2024-02-01','2026-02-01',150,'2024-04-01'),
+(16,3,'MET-2024-001','2024-03-01','2026-03-01',500,'2024-05-01'),
+(17,4,'AML-2024-001','2024-01-01','2026-01-01',300,'2024-02-01'),
+(18,5,'LOS-2024-001','2024-02-01','2026-02-01',400,'2024-04-01'),
+(19,6,'VTC-2024-001','2024-03-01','2026-03-01',800,'2024-05-01'),
+(20,4,'CAL-2024-001','2024-03-01','2026-03-01',500,'2024-05-01'),
+(21,5,'DIC-2024-001','2024-01-01','2025-12-01',300,'2024-03-01');
+
+INSERT INTO stores (store_code, store_name, address, phone) VALUES
+('CH007', 'Nhà thuốc Hoàn Kiếm', '12 Hàng Bài, Q.Hoàn Kiếm, TP.Hà Nội', '024-3825-1234'),
+('CH008', 'Nhà thuốc Cầu Giấy', '88 Xuân Thủy, Q.Cầu Giấy, TP.Hà Nội', '024-3793-5678'),
+('CH009', 'Nhà thuốc Đống Đa', '210 Tây Sơn, Q.Đống Đa, TP.Hà Nội', '024-3567-8899'),
+('CH010', 'Nhà thuốc Hai Bà Trưng', '45 Bạch Mai, Q.Hai Bà Trưng, TP.Hà Nội', '024-3971-2222'),
+('CH011', 'Nhà thuốc Thanh Xuân', '102 Nguyễn Trãi, Q.Thanh Xuân, TP.Hà Nội', '024-3556-4444');
+
+INSERT INTO manufacturers (manufacturer_name, abbreviation, country, address, phone, email) VALUES
+('Novartis', 'NVS', 'Thụy Sĩ', 'Lichtstrasse 35, Basel, Switzerland', NULL, 'contact@novartis.com'),
+('Roche', 'RCH', 'Thụy Sĩ', 'Grenzacherstrasse 124, Basel, Switzerland', NULL, 'contact@roche.com'),
+('AstraZeneca', 'AZN', 'Anh', '1 Francis Crick Avenue, Cambridge, UK', NULL, 'contact@astrazeneca.com'),
+('Boehringer Ingelheim', 'BI', 'Đức', 'Binger Strasse 173, Ingelheim, Germany', NULL, 'contact@boehringer-ingelheim.com'),
+('Servier', 'SVR', 'Pháp', '50 Rue Carnot, Suresnes, France', NULL, 'contact@servier.com'),
+('Mega Lifesciences', 'MEG', 'Thái Lan', 'Bangkok, Thailand', NULL, 'contact@megawecare.com'),
+('US Pharma USA', 'USP', 'Việt Nam', 'KCN VSIP, Bình Dương', NULL, 'info@uspharma.vn'),
+('Mekophar', 'MKP', 'Việt Nam', '297/5 Lý Thường Kiệt, Q11, TP.HCM', NULL, 'info@mekophar.com'),
+('Dược phẩm OPC', 'OPC', 'Việt Nam', '1017 Hồng Bàng, Q6, TP.HCM', NULL, 'info@opcpharma.com');
+
+INSERT INTO generic_drugs (generic_name, description, usage_info, drug_category, requires_prescription) VALUES
+('Clarithromycin', 'Kháng sinh Macrolide', 'Nhiễm khuẩn đường hô hấp', 'Kháng sinh', TRUE),
+('Atorvastatin', 'Thuốc hạ cholesterol', 'Giảm mỡ máu', 'Tim mạch', TRUE),
+('Simvastatin', 'Thuốc hạ lipid máu', 'Điều trị tăng cholesterol', 'Tim mạch', TRUE),
+('Pantoprazole', 'Thuốc ức chế bơm proton', 'Điều trị trào ngược dạ dày', 'Tiêu hóa', TRUE),
+('Esomeprazole', 'Thuốc PPI', 'Loét dạ dày, GERD', 'Tiêu hóa', TRUE),
+('Loperamide', 'Thuốc chống tiêu chảy', 'Điều trị tiêu chảy cấp', 'Tiêu hóa', FALSE),
+('Domperidone', 'Thuốc chống nôn', 'Buồn nôn, khó tiêu', 'Tiêu hóa', TRUE),
+('Fexofenadine', 'Kháng histamin', 'Dị ứng, viêm mũi dị ứng', 'Dị ứng', FALSE),
+('Montelukast', 'Thuốc chống hen', 'Hen suyễn, dị ứng', 'Hô hấp', TRUE),
+('Acetylcysteine', 'Thuốc long đờm', 'Ho có đờm', 'Hô hấp', FALSE);
+
+INSERT INTO brand_drugs
+(drug_code, brand_name, generic_drug_id, manufacturer_id, dosage_form, strength, unit, packaging)
+VALUES
+
+('ANT-CLR-TAB-500MG-NVS-001','Klacid',14,16,'Viên nén','500mg','Viên','Hộp 14 viên'),
+('CAR-ATO-TAB-10MG-PFZ-001','Lipitor',15,5,'Viên nén','10mg','Viên','Hộp 30 viên'),
+('CAR-SIM-TAB-20MG-SVR-001','Zocor',16,20,'Viên nén','20mg','Viên','Hộp 28 viên'),
+('GIT-PAN-TAB-40MG-AZN-001','Pantoloc',17,18,'Viên nén','40mg','Viên','Hộp 14 viên'),
+('GIT-ESO-CAP-20MG-AZN-001','Nexium',18,18,'Viên nang','20mg','Viên','Hộp 14 viên'),
+
+('GIT-LOP-TAB-2MG-MEG-001','Imodium',19,21,'Viên nén','2mg','Viên','Hộp 10 viên'),
+('GIT-DOM-TAB-10MG-MKP-001','Domperidone Mekophar',20,23,'Viên nén','10mg','Viên','Hộp 10 vỉ'),
+
+('ALG-FEX-TAB-120MG-NVS-001','Telfast',21,16,'Viên nén','120mg','Viên','Hộp 10 viên'),
+('RES-MON-TAB-10MG-AZN-001','Singulair',22,18,'Viên nén','10mg','Viên','Hộp 14 viên'),
+
+('RES-ACC-SACH-200MG-OPC-001','Acemuc',23,24,'Gói bột','200mg','Gói','Hộp 30 gói');
+
+INSERT INTO other_products (product_code, product_name, category, manufacturer_id, unit) VALUES
+('MED-THM-001','Nhiệt kế điện tử','Thiết bị y tế',1,'Cái'),
+('MED-BLD-001','Máy đo huyết áp Omron','Thiết bị y tế',1,'Máy'),
+('MED-GLU-001','Máy đo đường huyết','Thiết bị y tế',6,'Máy'),
+('MED-BND-001','Băng gạc y tế','Vật tư y tế',8,'Hộp'),
+('MED-ALC-001','Cồn y tế 70°','Sát khuẩn',8,'Chai'),
+('MED-SAL-001','Nước muối sinh lý 0.9%','Dung dịch rửa',8,'Chai'),
+('MED-PLS-001','Miếng dán cá nhân','Băng dán',8,'Hộp'),
+('MED-MSK-002','Khẩu trang N95','Khẩu trang',8,'Hộp');
+
+INSERT INTO drug_inventory
+(brand_drug_id, store_id, batch_number, manufacturing_date, expiry_date, quantity, import_date)
+VALUES
+
+-- Klacid
+(14,1,'KLA-2024-001','2024-01-01','2026-01-01',120,'2024-03-01'),
+
+-- Lipitor
+(15,1,'LIP-2024-001','2024-02-01','2026-02-01',200,'2024-04-01'),
+
+-- Zocor
+(16,2,'ZOC-2024-001','2024-01-15','2026-01-15',150,'2024-03-15'),
+
+-- Pantoloc
+(17,2,'PAN-2024-001','2024-03-01','2026-03-01',180,'2024-05-01'),
+
+-- Nexium
+(18,1,'NEX-2024-001','2024-02-10','2026-02-10',160,'2024-04-01'),
+
+-- Imodium
+(19,3,'IMO-2024-001','2024-01-01','2025-12-01',300,'2024-03-01'),
+
+-- Domperidone
+(20,3,'DOM-2024-001','2024-02-01','2026-02-01',220,'2024-04-01'),
+
+-- Telfast
+(21,1,'TEL-2024-001','2024-03-01','2026-03-01',140,'2024-05-01'),
+
+-- Singulair
+(22,2,'SIN-2024-001','2024-02-01','2026-02-01',100,'2024-04-01'),
+
+-- Acemuc
+(23,3,'ACE-2024-001','2024-01-01','2025-11-01',250,'2024-03-01');
+
+INSERT INTO drug_prices 
+(brand_drug_id, cost_price, selling_price, effective_date)
+VALUES
+
+-- Klacid (Clarithromycin)
+(14, 45000, 75000, '2024-01-01'),
+
+-- Lipitor (Atorvastatin)
+(15, 12000, 20000, '2024-01-01'),
+
+-- Zocor (Simvastatin)
+(16, 9000, 16000, '2024-01-01'),
+
+-- Pantoloc (Pantoprazole)
+(17, 7000, 13000, '2024-01-01'),
+
+-- Nexium (Esomeprazole)
+(18, 15000, 25000, '2024-01-01'),
+
+-- Imodium (Loperamide)
+(19, 2000, 4000, '2024-01-01'),
+
+-- Domperidone
+(20, 1500, 3000, '2024-01-01'),
+
+-- Telfast (Fexofenadine)
+(21, 8000, 15000, '2024-01-01'),
+
+-- Singulair (Montelukast)
+(22, 18000, 32000, '2024-01-01'),
+
+-- Acemuc (Acetylcysteine)
+(23, 2500, 4500, '2024-01-01');
 
 -- =====================================================
 -- VIEW: Thuốc sắp hết hạn

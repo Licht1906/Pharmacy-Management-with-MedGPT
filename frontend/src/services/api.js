@@ -18,7 +18,7 @@ export const chatWithMedGPT = async (message, sessionId = 'default') => {
 //orders API
 
 export const createOrder = async (orderData) => {
-    const response = await API.post('/orders', orderData);
+    const response = await API.post('/orders/create', orderData);
     return response.data;
 };
 
@@ -35,8 +35,9 @@ export const getOrderDetail = async (orderId) => {
 
 // drug API
 
-export const searchDrugs = async (name) => {
-    const response = await API.get('drugs/search', {params: { name}});
+export const searchDrugs = async (name, storeId = null) => {
+    const params = storeId ? { name, store_id: storeId } : { name };
+    const response = await API.get('drugs/search', { params });
     return response.data;
 };
 
@@ -56,6 +57,11 @@ export const getDisposalReport = async (storeId = null, days = 90) => {
     const params = {days};
     if (storeId) params.store_id = storeId;
     const response = await API.get('/disposal/report', { params });
+    return response.data;
+}
+
+export const disposeDrugs = async (inventoryIds) => {
+    const response = await API.post('/disposal/dispose', { inventory_ids: inventoryIds });
     return response.data;
 }
 
@@ -126,6 +132,10 @@ export const createStore = async (data) => {
     const response = await API.post('/manage/stores', data);
     return response.data;
 };
+export const deleteStore = async (storeId) => {
+    const response = await API.delete(`/manage/stores/${storeId}`);
+    return response.data;
+};
 
 // Nhân viên
 export const getEmployees = async () => {
@@ -134,6 +144,10 @@ export const getEmployees = async () => {
 };
 export const createEmployee = async (data) => {
     const response = await API.post('/manage/employees', data);
+    return response.data;
+};
+export const deleteEmployee = async (employeeId, deletedById) => {
+    const response = await API.delete(`/manage/employees/${employeeId}`, { params: { deleted_by_id: deletedById } });
     return response.data;
 };
 
@@ -155,6 +169,42 @@ export const getPrices = async () => {
 };
 export const createPrice = async (data) => {
     const response = await API.post('/manage/prices', data);
+    return response.data;
+};
+
+// Vật dụng y tế
+export const getMedicalSupplies = async (params = {}) => {
+    const response = await API.get('/medical-supplies/products', { params });
+    return response.data;
+};
+
+export const createMedicalSupply = async (data) => {
+    const response = await API.post('/medical-supplies/products', data);
+    return response.data;
+};
+
+export const updateMedicalSupply = async (id, data) => {
+    const response = await API.put(`/medical-supplies/products/${id}`, data);
+    return response.data;
+};
+
+export const deleteMedicalSupply = async (id) => {
+    const response = await API.delete(`/medical-supplies/products/${id}`);
+    return response.data;
+};
+
+export const getProductInventory = async (params = {}) => {
+    const response = await API.get('/medical-supplies/inventory', { params });
+    return response.data;
+};
+
+export const importProductInventory = async (data) => {
+    const response = await API.post('/manage/import-product-inventory', data);
+    return response.data;
+};
+
+export const getProductCategories = async () => {
+    const response = await API.get('/medical-supplies/categories');
     return response.data;
 };
 

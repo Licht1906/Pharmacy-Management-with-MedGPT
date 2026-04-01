@@ -28,6 +28,7 @@ class Manufacturer(Base):
     
     # Quan hệ: 1 NSX → nhiều biệt dược
     brand_drugs = relationship("BrandDrug", back_populates="manufacturer")
+    other_products = relationship("OtherProduct", back_populates="manufacturer")
 
 
 # ============================
@@ -150,6 +151,7 @@ class Store(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     drug_inventories = relationship("DrugInventory", back_populates="store")
+    product_inventories = relationship("ProductInventory", back_populates="store")
 
 
 # ============================
@@ -193,6 +195,29 @@ class DrugInventory(Base):
     
     brand_drug = relationship("BrandDrug", back_populates="inventory_items")
     store = relationship("Store", back_populates="drug_inventories")
+
+
+# ============================
+# BẢNG: TỒN KHO SẢN PHẨM Y TẾ
+# ============================
+class ProductInventory(Base):
+    __tablename__ = "product_inventory"
+    
+    inventory_id = Column(Integer, primary_key=True)
+    product_id = Column(Integer, ForeignKey("other_products.product_id"))
+    store_id = Column(Integer, ForeignKey("stores.store_id"))
+    batch_number = Column(String(100), nullable=False)
+    manufacturing_date = Column(Date)
+    expiry_date = Column(Date, nullable=False)      # HẠN SỬ DỤNG
+    quantity = Column(Integer, nullable=False, default=0)
+    import_date = Column(Date, nullable=False)
+    supplier_info = Column(Text)
+    status = Column(String(20), default='ACTIVE')
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow)
+    
+    product = relationship("OtherProduct", back_populates="inventory_items")
+    store = relationship("Store", back_populates="product_inventories")
 
 
 # ============================
@@ -317,6 +342,10 @@ class OtherProduct(Base):
     barcode = Column(String(50))
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Quan hệ: 1 sản phẩm → nhiều lô tồn kho
+    inventory_items = relationship("ProductInventory", back_populates="product")
+    manufacturer = relationship("Manufacturer", back_populates="other_products")
 
 
 # ============================

@@ -40,7 +40,7 @@ const Dashboard = ({ user }) => {
     return (
         <div style={{ padding: 24 }}>
             <div style={{ marginBottom: 24 }}>
-                <h2>📊 Dashboard</h2>
+                <h1>Dashboard</h1>
                 <p style={{ color: '#666' }}>Chào mừng <b>{user?.full_name}</b> - {user?.store_name}</p>
             </div>
 

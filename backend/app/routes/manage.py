@@ -10,7 +10,7 @@ from datetime import date, datetime
 from app.database import get_db
 from app.models import (
     GenericDrug, BrandDrug, Manufacturer, Store, Employee,
-    DrugInventory, DrugPrice, Customer, OtherProduct
+    DrugInventory, ProductInventory, DrugPrice, Customer, OtherProduct
 )
 from sqlalchemy import or_
 
@@ -76,6 +76,16 @@ class EmployeeCreate(BaseModel):
 # --- Nhập kho ---
 class ImportInventory(BaseModel):
     brand_drug_id: int
+    store_id: int
+    batch_number: str
+    manufacturing_date: Optional[str] = None
+    expiry_date: str
+    quantity: int
+    supplier_info: Optional[str] = None
+
+# --- Nhập kho sản phẩm y tế ---
+class ImportProductInventory(BaseModel):
+    product_id: int
     store_id: int
     batch_number: str
     manufacturing_date: Optional[str] = None
@@ -466,6 +476,45 @@ def create_employee(request: EmployeeCreateWithAuth, db: Session = Depends(get_d
     }
 
 
+@router.delete("/employees/{employee_id}")
+def delete_employee(employee_id: int, deleted_by_id: int, db: Session = Depends(get_db)):
+    """Xóa nhân viên (Soft Delete) - PHÂN QUYỀN: OWNER hoặc MANAGER"""
+    
+    # 1. Kiểm tra người xóa
+    deleter = db.query(Employee).filter(
+        Employee.employee_id == deleted_by_id,
+        Employee.is_active == True
+    ).first()
+    
+    if not deleter:
+        raise HTTPException(status_code=403, detail="Không tìm thấy tài khoản thực hiện yêu cầu")
+    
+    if deleter.role not in ['OWNER', 'MANAGER']:
+        raise HTTPException(status_code=403, detail="Bạn không có quyền xóa nhân viên")
+
+    # 2. Kiểm tra tài khoản bị xóa
+    target = db.query(Employee).filter(Employee.employee_id == employee_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Không tìm thấy nhân viên cần xóa")
+    
+    # 3. Áp dụng quy tắc kinh doanh
+    # Không thể tự xóa chính mình bằng API này (nói chung nên tránh)
+    if deleter.employee_id == target.employee_id:
+        raise HTTPException(status_code=400, detail="Bạn không thể tự xóa tài khoản của chính mình")
+
+    if deleter.role == 'MANAGER':
+        if target.role in ['OWNER', 'MANAGER']:
+            raise HTTPException(
+                status_code=403, 
+                detail="Quản lý không có quyền xóa Chủ chuỗi hoặc các Quản lý khác"
+            )
+
+    # 4. Thực hiện xóa mềm
+    target.is_active = False
+    db.commit()
+    
+    return {"success": True, "message": f"Đã xóa nhân viên: {target.full_name}"}
+
 # =====================================================
 # NHẬP KHO
 # =====================================================
@@ -530,6 +579,25 @@ def import_inventory(request: ImportInventory, db: Session = Depends(get_db)):
     db.add(item)
     db.commit()
     return {"success": True, "message": f"Đã nhập kho: {request.quantity} sản phẩm, lô {request.batch_number}"}
+
+
+@router.post("/import-product-inventory")
+def import_product_inventory(request: ImportProductInventory, db: Session = Depends(get_db)):
+    """Nhập sản phẩm y tế vào kho"""
+    item = ProductInventory(
+        product_id=request.product_id,
+        store_id=request.store_id,
+        batch_number=request.batch_number,
+        manufacturing_date=date.fromisoformat(request.manufacturing_date) if request.manufacturing_date else None,
+        expiry_date=date.fromisoformat(request.expiry_date),
+        quantity=request.quantity,
+        import_date=date.today(),
+        supplier_info=request.supplier_info,
+        status='ACTIVE'
+    )
+    db.add(item)
+    db.commit()
+    return {"success": True, "message": f"Đã nhập kho sản phẩm y tế: {request.quantity} sản phẩm, lô {request.batch_number}"}
 
 
 # =====================================================

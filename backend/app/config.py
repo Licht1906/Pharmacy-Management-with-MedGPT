@@ -18,7 +18,7 @@ class Settings:
     )
     
     # Google Gemini API
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyDUkuv9cjKQ5xZsXwShelckNJUvgXh5L2I")
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
     
     # Secret key cho JWT
     SECRET_KEY = os.getenv("SECRET_KEY", "pharmacy-secret-key")

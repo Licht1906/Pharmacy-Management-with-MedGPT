@@ -19,13 +19,14 @@ def create_app():
     )
     
     from app.routes import orders, drugs, disposal, medgpt
-    from app.routes import manage
+    from app.routes import manage, medical_supplies
     
     app.include_router(orders.router, prefix="/api/orders", tags=["Đơn hàng"])
     app.include_router(drugs.router, prefix="/api/drugs", tags=["Tra cứu thuốc"])
     app.include_router(disposal.router, prefix="/api/disposal", tags=["Thanh lý"])
     app.include_router(medgpt.router, prefix="/api/medgpt", tags=["MedGPT Chat"])
     app.include_router(manage.router, prefix="/api/manage", tags=["Quản lý"])
+    app.include_router(medical_supplies.router, prefix="/api/medical-supplies", tags=["Vật dụng y tế"])
     
     @app.get("/")
     def root():

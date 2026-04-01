@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, Select, message, Tag, Alert } from 'antd';
-import { PlusOutlined, TeamOutlined, LockOutlined } from '@ant-design/icons';
-import { getEmployees, createEmployee, getStores } from '../services/api';
+import { Table, Button, Modal, Form, Input, Select, message, Tag, Alert, Popconfirm, Tooltip } from 'antd';
+import { PlusOutlined, TeamOutlined, LockOutlined, DeleteOutlined } from '@ant-design/icons';
+import { getEmployees, createEmployee, getStores, deleteEmployee } from '../services/api';
 
 const ManageEmployees = ({ user }) => {
     const [data, setData] = useState([]);
@@ -40,6 +40,16 @@ const ManageEmployees = ({ user }) => {
             fetchData();
         } catch (e) {
             message.error(e.response?.data?.detail || 'Lỗi thêm nhân viên');
+        }
+    };
+
+    const handleDelete = async (employeeId) => {
+        try {
+            await deleteEmployee(employeeId, user.employee_id);
+            message.success('Đã xóa nhân viên thành công');
+            fetchData();
+        } catch (e) {
+            message.error(e.response?.data?.detail || 'Lỗi khi xóa nhân viên');
         }
     };
 
@@ -82,6 +92,51 @@ const ManageEmployees = ({ user }) => {
         { title: 'Cửa hàng', dataIndex: 'store_name' },
         { title: 'SĐT', dataIndex: 'phone' },
         { title: 'Username', dataIndex: 'username' },
+        {
+            title: 'Hành động',
+            key: 'action',
+            render: (_, record) => {
+                let canDeleteRecord = false;
+                let disableReason = '';
+
+                if (!canCreate) {
+                    canDeleteRecord = false;
+                    disableReason = 'Bạn không có quyền xóa nhân viên';
+                } else if (record.employee_id === user?.employee_id) {
+                    canDeleteRecord = false;
+                    disableReason = 'Không thể tự xóa chính mình';
+                } else if (isOwner) {
+                    canDeleteRecord = true;
+                } else if (user?.role === 'MANAGER') {
+                    if (record.role === 'OWNER' || record.role === 'MANAGER') {
+                        canDeleteRecord = false;
+                        disableReason = 'Quản lý không thể xóa Chủ chuỗi hoặc Quản lý khác';
+                    } else {
+                        canDeleteRecord = true;
+                    }
+                }
+
+                if (!canDeleteRecord) {
+                    return (
+                        <Tooltip title={disableReason}>
+                            <Button disabled danger icon={<DeleteOutlined />} size="small" />
+                        </Tooltip>
+                    );
+                }
+
+                return (
+                    <Popconfirm
+                        title={`Bạn có chắc muốn xóa nhân viên ${record.full_name}?`}
+                        onConfirm={() => handleDelete(record.employee_id)}
+                        okText="Xóa"
+                        cancelText="Hủy"
+                        okButtonProps={{ danger: true }}
+                    >
+                        <Button danger icon={<DeleteOutlined />} size="small" />
+                    </Popconfirm>
+                );
+            }
+        }
     ];
 
     return (

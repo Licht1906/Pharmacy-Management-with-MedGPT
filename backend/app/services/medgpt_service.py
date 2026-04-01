@@ -23,7 +23,7 @@ from app.utils.fefo_handler import allocate_stock, deduct_stock
 genai.configure(api_key=settings.GEMINI_API_KEY)
 
 model = genai.GenerativeModel(
-    model_name="gemini-2.5-flash-lite",
+    model_name="gemini-2.5-flash",
     system_instruction="""
 Bạn là MedGPT - Trợ lý AI thông minh cho hệ thống quản lý chuỗi nhà thuốc.
 
@@ -489,6 +489,114 @@ Hãy trả lời câu hỏi dựa trên dữ liệu trên.
         return info
     
     # ================================
+    # XỬ LÝ: TÌM THUỐC THAY THẾ (JSON FORMAT)
+    # ================================
+    def _handle_substitute_json(self, db, drug_name):
+        """Tìm thuốc thay thế nhưng trả về định dạng JSON có cấu trúc"""
+        
+        if not drug_name:
+            return {"found": False, "message": "Vui lòng cho biết tên thuốc cần tìm thay thế."}
+        
+        # Tìm thuốc gốc
+        generic = db.query(GenericDrug).filter(
+            or_(
+                GenericDrug.generic_name.ilike(f"%{drug_name}%"),
+            )
+        ).first()
+        
+        if not generic:
+            brand = db.query(BrandDrug).filter(
+                BrandDrug.brand_name.ilike(f"%{drug_name}%")
+            ).first()
+            if brand:
+                generic = db.query(GenericDrug).filter(
+                    GenericDrug.generic_drug_id == brand.generic_drug_id
+                ).first()
+        
+        if not generic:
+            return {"found": False, "message": f"Không tìm thấy thuốc '{drug_name}' trong hệ thống."}
+        
+        original_drug = {
+            "generic_name": generic.generic_name,
+            "description": generic.description,
+            "usage": generic.usage_info,
+            "dosage_guide": generic.dosage_guide,
+            "side_effects": generic.side_effects
+        }
+        
+        # Tìm nhóm thay thế
+        sub_links = db.query(GenericDrugSubstitution).filter(
+            GenericDrugSubstitution.generic_drug_id == generic.generic_drug_id
+        ).all()
+        
+        if not sub_links:
+            return {"found": True, "original_drug": original_drug, "substitutes": []}
+        
+        substitutes_list = []
+        
+        for link in sub_links:
+            group = db.query(SubstitutionGroup).filter(
+                SubstitutionGroup.group_id == link.group_id
+            ).first()
+            
+            same_group = db.query(GenericDrugSubstitution).filter(
+                and_(
+                    GenericDrugSubstitution.group_id == link.group_id,
+                    GenericDrugSubstitution.generic_drug_id != generic.generic_drug_id
+                )
+            ).all()
+            
+            for sg in same_group:
+                sub_drug = db.query(GenericDrug).filter(
+                    GenericDrug.generic_drug_id == sg.generic_drug_id
+                ).first()
+                
+                if sub_drug:
+                    brands = db.query(BrandDrug).filter(
+                        BrandDrug.generic_drug_id == sub_drug.generic_drug_id,
+                        BrandDrug.is_active == True
+                    ).all()
+                    
+                    brands_list = []
+                    for b in brands:
+                        # Fetch stock securely
+                        inventory = db.query(DrugInventory).filter(
+                            DrugInventory.brand_drug_id == b.brand_drug_id,
+                            DrugInventory.status == 'ACTIVE',
+                            DrugInventory.quantity > 0
+                        ).all()
+                        total_stock = sum(inv.quantity for inv in inventory)
+                        
+                        mfr = db.query(Manufacturer).filter(
+                            Manufacturer.manufacturer_id == b.manufacturer_id
+                        ).first()
+                        brands_list.append({
+                            "brand_name": b.brand_name,
+                            "strength": b.strength,
+                            "dosage_form": b.dosage_form,
+                            "stock": total_stock,
+                            "manufacturer": mfr.manufacturer_name if mfr else "N/A",
+                            "country": mfr.country if mfr else "N/A"
+                        })
+                    
+                    substitutes_list.append({
+                        "generic_name": sub_drug.generic_name,
+                        "priority": sg.priority,
+                        "group": group.group_name if group else "",
+                        "usage": sub_drug.usage_info,
+                        "description": sub_drug.description,
+                        "dosage_guide": sub_drug.dosage_guide,
+                        "side_effects": sub_drug.side_effects,
+                        "brands": brands_list
+                    })
+        
+        return {
+            "found": True,
+            "original_drug": original_drug,
+            "substitutes": substitutes_list
+        }
+    
+    # ================================
     # XỬ LÝ: BÁO CÁO HẾT HẠN / THANH LÝ
     # ================================
     def _handle_expiry(self, db, store_id=None, days=90):
@@ -579,6 +687,80 @@ Hãy trả lời câu hỏi dựa trên dữ liệu trên.
         
         return info
     
+    # ================================
+    # XỬ LÝ: BÁO CÁO HẾT HẠN / THANH LÝ (JSON FORMAT)
+    # ================================
+    def get_expiring_drugs(self, db, store_id=None, days=90):
+        """Báo cáo thuốc cần thanh lý (JSON format cho Frontend UI)"""
+        threshold = date.today() + timedelta(days=days)
+        
+        query = db.query(DrugInventory).filter(
+            and_(
+                DrugInventory.status == 'ACTIVE',
+                DrugInventory.quantity > 0,
+                DrugInventory.expiry_date <= threshold
+            )
+        )
+        
+        if store_id:
+            query = query.filter(DrugInventory.store_id == store_id)
+        
+        inventories = query.order_by(DrugInventory.expiry_date.asc()).all()
+        
+        expired = []
+        critical = []
+        warning = []
+        
+        for inv in inventories:
+            brand = db.query(BrandDrug).filter(
+                BrandDrug.brand_drug_id == inv.brand_drug_id
+            ).first()
+            store = db.query(Store).filter(
+                Store.store_id == inv.store_id
+            ).first()
+            price = db.query(DrugPrice).filter(
+                DrugPrice.brand_drug_id == inv.brand_drug_id,
+                DrugPrice.effective_date <= date.today(),
+                or_(DrugPrice.end_date == None, DrugPrice.end_date >= date.today())
+            ).first()
+            
+            days_left = (inv.expiry_date - date.today()).days
+            cost = float(price.cost_price) * inv.quantity if price else 0
+            
+            item = {
+                "inventory_id": inv.inventory_id,
+                "brand_name": brand.brand_name if brand else "N/A",
+                "strength": brand.strength if brand else "",
+                "drug_code": brand.drug_code if brand else "N/A",
+                "store_name": store.store_name if store else "N/A",
+                "batch_number": inv.batch_number,
+                "expiry_date": inv.expiry_date.isoformat(),
+                "days_remaining": days_left,
+                "quantity": inv.quantity,
+                "estimated_loss": cost
+            }
+            
+            if days_left <= 0:
+                expired.append(item)
+            elif days_left <= 30:
+                critical.append(item)
+            else:
+                warning.append(item)
+        
+        total_loss = sum(i["estimated_loss"] for i in expired + critical + warning)
+        
+        return {
+            "summary": {
+                "total_expired": len(expired),
+                "total_critical": len(critical),
+                "total_warning": len(warning),
+                "estimated_total_loss": total_loss
+            },
+            "expired": expired,
+            "critical": critical,
+            "warning": warning
+        }
+
     # ================================
     # XỬ LÝ: ĐỀ XUẤT MÃ THUỐC
     # ================================
