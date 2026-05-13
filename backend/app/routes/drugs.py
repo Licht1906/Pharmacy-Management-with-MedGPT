@@ -8,6 +8,7 @@ from app.services.medgpt_service import medgpt_service
 from app.models import GenericDrug, BrandDrug, Manufacturer, DrugInventory, DrugPrice
 from sqlalchemy import or_, and_, func
 from datetime import date
+from app.dependencies import get_current_user, CurrentUser
 
 router = APIRouter()
 
@@ -16,7 +17,8 @@ router = APIRouter()
 def search_drugs(
     name: str = Query(..., description="Tên thuốc cần tìm"),
     store_id: Optional[int] = Query(None, description="ID cửa hàng để lọc tồn kho"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[CurrentUser] = Depends(get_current_user)
 ):
     """Tra cứu thông tin thuốc và tồn kho (JSON format)"""
     brands = db.query(BrandDrug).filter(
@@ -46,7 +48,9 @@ def search_drugs(
             DrugInventory.status == 'ACTIVE',
             DrugInventory.expiry_date > date.today()
         ]
-        if store_id:
+        if current_user and current_user.role != 'OWNER':
+            inventory_filters.append(DrugInventory.store_id == current_user.store_id)
+        elif store_id:
             inventory_filters.append(DrugInventory.store_id == store_id)
 
         total_qty = db.query(func.sum(DrugInventory.quantity)).filter(

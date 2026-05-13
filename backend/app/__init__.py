@@ -1,4 +1,6 @@
+import os
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 
@@ -9,6 +11,13 @@ def create_app():
         version=settings.VERSION,
         description="Hệ thống quản lý chuỗi nhà thuốc tích hợp MedGPT"
     )
+    
+    # Ensure uploads directory exists
+    upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
+    os.makedirs(upload_dir, exist_ok=True)
+    
+    # Mount static files
+    app.mount("/static/uploads", StaticFiles(directory=upload_dir), name="uploads")
     
     app.add_middleware(
         CORSMiddleware,

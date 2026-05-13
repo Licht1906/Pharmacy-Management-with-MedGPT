@@ -532,7 +532,59 @@ Hãy trả lời câu hỏi dựa trên dữ liệu trên.
         if not sub_links:
             return {"found": True, "original_drug": original_drug, "substitutes": []}
         
+        def get_brands_with_stock(drug_id):
+            brands = db.query(BrandDrug).filter(
+                BrandDrug.generic_drug_id == drug_id,
+                BrandDrug.is_active == True
+            ).all()
+            
+            brands_list = []
+            for b in brands:
+                inventory = db.query(DrugInventory).filter(
+                    DrugInventory.brand_drug_id == b.brand_drug_id,
+                    DrugInventory.status == 'ACTIVE',
+                    DrugInventory.quantity > 0
+                ).all()
+                
+                stock_by_store = {}
+                for inv in inventory:
+                    store = db.query(Store).filter(Store.store_id == inv.store_id).first()
+                    store_name = store.store_name if store else "Khác"
+                    stock_by_store[store_name] = stock_by_store.get(store_name, 0) + inv.quantity
+                
+                stock_info = [{"store": k, "quantity": v} for k, v in stock_by_store.items()]
+                total_stock = sum(inv.quantity for inv in inventory)
+                
+                mfr = db.query(Manufacturer).filter(
+                    Manufacturer.manufacturer_id == b.manufacturer_id
+                ).first()
+                brands_list.append({
+                    "brand_name": b.brand_name,
+                    "strength": b.strength,
+                    "dosage_form": b.dosage_form,
+                    "stock": total_stock,
+                    "stock_by_store": stock_info,
+                    "image_url": b.image_url,
+                    "manufacturer": mfr.manufacturer_name if mfr else "N/A",
+                    "country": mfr.country if mfr else "N/A"
+                })
+            return brands_list
+
         substitutes_list = []
+        
+        # Thêm các biệt dược cùng hoạt chất gốc vào danh sách
+        original_brands = get_brands_with_stock(generic.generic_drug_id)
+        if original_brands:
+            substitutes_list.append({
+                "generic_name": generic.generic_name,
+                "priority": 0,
+                "group": "Cùng hoạt chất gốc",
+                "usage": generic.usage_info,
+                "description": generic.description,
+                "dosage_guide": generic.dosage_guide,
+                "side_effects": generic.side_effects,
+                "brands": original_brands
+            })
         
         for link in sub_links:
             group = db.query(SubstitutionGroup).filter(
@@ -552,33 +604,7 @@ Hãy trả lời câu hỏi dựa trên dữ liệu trên.
                 ).first()
                 
                 if sub_drug:
-                    brands = db.query(BrandDrug).filter(
-                        BrandDrug.generic_drug_id == sub_drug.generic_drug_id,
-                        BrandDrug.is_active == True
-                    ).all()
-                    
-                    brands_list = []
-                    for b in brands:
-                        # Fetch stock securely
-                        inventory = db.query(DrugInventory).filter(
-                            DrugInventory.brand_drug_id == b.brand_drug_id,
-                            DrugInventory.status == 'ACTIVE',
-                            DrugInventory.quantity > 0
-                        ).all()
-                        total_stock = sum(inv.quantity for inv in inventory)
-                        
-                        mfr = db.query(Manufacturer).filter(
-                            Manufacturer.manufacturer_id == b.manufacturer_id
-                        ).first()
-                        brands_list.append({
-                            "brand_name": b.brand_name,
-                            "strength": b.strength,
-                            "dosage_form": b.dosage_form,
-                            "stock": total_stock,
-                            "manufacturer": mfr.manufacturer_name if mfr else "N/A",
-                            "country": mfr.country if mfr else "N/A"
-                        })
-                    
+                    sub_brands = get_brands_with_stock(sub_drug.generic_drug_id)
                     substitutes_list.append({
                         "generic_name": sub_drug.generic_name,
                         "priority": sg.priority,
@@ -587,7 +613,7 @@ Hãy trả lời câu hỏi dựa trên dữ liệu trên.
                         "description": sub_drug.description,
                         "dosage_guide": sub_drug.dosage_guide,
                         "side_effects": sub_drug.side_effects,
-                        "brands": brands_list
+                        "brands": sub_brands
                     })
         
         return {

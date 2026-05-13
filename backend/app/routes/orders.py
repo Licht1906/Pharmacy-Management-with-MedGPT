@@ -12,6 +12,7 @@ from app.models import (
 )
 from app.utils.fefo_handler import allocate_stock, deduct_stock
 from sqlalchemy import or_, and_
+from app.dependencies import get_current_user, CurrentUser
 
 router = APIRouter()
 
@@ -34,8 +35,11 @@ class OrderCreateRequest(BaseModel):
 # === API: TẠO ĐƠN HÀNG ===
 
 @router.post("/create")
-def create_order(request: OrderCreateRequest, db: Session = Depends(get_db)):
+def create_order(request: OrderCreateRequest, db: Session = Depends(get_db), current_user: Optional[CurrentUser] = Depends(get_current_user)):
     """Tạo đơn hàng mới - tự động FEFO"""
+    
+    if current_user and current_user.role != 'OWNER':
+        request.store_id = current_user.store_id
     
     # Tạo mã đơn
     order_code = f"DH-{datetime.now().strftime('%Y%m%d%H%M%S')}"
@@ -153,11 +157,14 @@ def create_order(request: OrderCreateRequest, db: Session = Depends(get_db)):
 def list_orders(
     store_id: Optional[int] = None,
     status: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[CurrentUser] = Depends(get_current_user)
 ):
     query = db.query(Order)
     
-    if store_id:
+    if current_user and current_user.role != 'OWNER':
+        query = query.filter(Order.store_id == current_user.store_id)
+    elif store_id:
         query = query.filter(Order.store_id == store_id)
     if status:
         query = query.filter(Order.status == status)

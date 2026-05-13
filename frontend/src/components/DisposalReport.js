@@ -11,6 +11,16 @@ const DisposalReport = () => {
     const [loading, setLoading] = useState(false);
     const [storeId, setStoreId] = useState(null);
     const [stores, setStores] = useState([]);
+    
+    const saved = localStorage.getItem('pharmacy_user');
+    const user = saved ? JSON.parse(saved) : null;
+    const isOwner = user?.role === 'OWNER';
+
+    useEffect(() => {
+        if (!isOwner && user?.store_id) {
+            setStoreId(user.store_id);
+        }
+    }, [isOwner, user]);
 
     const fetchReport = async () => {
         setLoading(true);
@@ -40,6 +50,7 @@ const DisposalReport = () => {
 
     useEffect(() => {
         fetchReport();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [storeId]);
 
     const handleDispose = async (inventoryIds) => {
@@ -117,9 +128,11 @@ const DisposalReport = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
                 <h2><WarningOutlined style={{ color: '#faad14' }} /> Báo Cáo Thuốc Cần Thanh Lý</h2>
                 <div style={{ display: 'flex', gap: 8 }}>
-                    <Select placeholder="Tất cả cửa hàng" allowClear onChange={setStoreId} style={{ width: 250 }}>
-                        {stores.map(s => <Select.Option key={s.store_id} value={s.store_id}>{s.store_code} - {s.store_name}</Select.Option>)}
-                    </Select>
+                    {isOwner && (
+                        <Select placeholder="Tất cả cửa hàng" allowClear onChange={setStoreId} style={{ width: 250 }}>
+                            {stores.map(s => <Select.Option key={s.store_id} value={s.store_id}>{s.store_code} - {s.store_name}</Select.Option>)}
+                        </Select>
+                    )}
                     <Popconfirm
                         title={`Thanh lý ${allItems.length} lô thuốc này?`}
                         onConfirm={() => {

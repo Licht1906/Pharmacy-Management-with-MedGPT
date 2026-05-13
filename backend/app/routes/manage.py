@@ -2,8 +2,11 @@
 API Quản lý: Thuốc, Cửa hàng, NSX, Nhân viên, Tồn kho, Giá
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
+import shutil
+import os
+import uuid
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import date, datetime
@@ -13,8 +16,30 @@ from app.models import (
     DrugInventory, ProductInventory, DrugPrice, Customer, OtherProduct
 )
 from sqlalchemy import or_
+from app.dependencies import get_current_user, CurrentUser
 
 router = APIRouter()
+
+# ============================
+# UPLOAD IMAGE
+# ============================
+@router.post("/upload-image")
+async def upload_image(file: UploadFile = File(...)):
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Không có file")
+    
+    ext = os.path.splitext(file.filename)[1]
+    new_filename = f"{uuid.uuid4().hex}{ext}"
+    
+    upload_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
+    os.makedirs(upload_dir, exist_ok=True)
+    
+    file_path = os.path.join(upload_dir, new_filename)
+    
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    return {"image_url": f"/static/uploads/{new_filename}"}
 
 
 # =====================================================
@@ -42,6 +67,7 @@ class BrandDrugCreate(BaseModel):
     strength: Optional[str] = None
     unit: Optional[str] = None
     packaging: Optional[str] = None
+    image_url: Optional[str] = None
 
 # --- Nhà sản xuất ---
 class ManufacturerCreate(BaseModel):
@@ -236,6 +262,7 @@ def list_brand_drugs(db: Session = Depends(get_db)):
             "strength": d.strength,
             "unit": d.unit,
             "packaging": d.packaging,
+            "image_url": d.image_url,
             "selling_price": float(price.selling_price) if price else None,
             "cost_price": float(price.cost_price) if price else None
         })
@@ -251,7 +278,8 @@ def create_brand_drug(request: BrandDrugCreate, db: Session = Depends(get_db)):
         dosage_form=request.dosage_form,
         strength=request.strength,
         unit=request.unit,
-        packaging=request.packaging
+        packaging=request.packaging,
+        image_url=request.image_url
     )
     db.add(drug)
     db.commit()
@@ -271,6 +299,8 @@ def update_brand_drug(drug_id: int, request: BrandDrugCreate, db: Session = Depe
     drug.strength = request.strength
     drug.unit = request.unit
     drug.packaging = request.packaging
+    if request.image_url is not None:
+        drug.image_url = request.image_url
     db.commit()
     return {"success": True, "message": "Đã cập nhật"}
 
@@ -343,8 +373,11 @@ def delete_manufacturer(mfr_id: int, db: Session = Depends(get_db)):
 # QUẢN LÝ CỬA HÀNG
 # =====================================================
 @router.get("/stores")
-def list_stores(db: Session = Depends(get_db)):
-    items = db.query(Store).filter(Store.is_active == True).all()
+def list_stores(db: Session = Depends(get_db), current_user: Optional[CurrentUser] = Depends(get_current_user)):
+    query = db.query(Store).filter(Store.is_active == True)
+    if current_user and current_user.role != 'OWNER':
+        query = query.filter(Store.store_id == current_user.store_id)
+    items = query.all()
     return {"data": [{
         "store_id": s.store_id,
         "store_code": s.store_code,
@@ -401,8 +434,11 @@ def delete_store(store_id: int, db: Session = Depends(get_db)):
 # QUẢN LÝ NHÂN VIÊN
 # =====================================================
 @router.get("/employees")
-def list_employees(db: Session = Depends(get_db)):
-    items = db.query(Employee).filter(Employee.is_active == True).all()
+def list_employees(db: Session = Depends(get_db), current_user: Optional[CurrentUser] = Depends(get_current_user)):
+    query = db.query(Employee).filter(Employee.is_active == True)
+    if current_user and current_user.role != 'OWNER':
+        query = query.filter(Employee.store_id == current_user.store_id)
+    items = query.all()
     results = []
     for e in items:
         store = db.query(Store).filter(Store.store_id == e.store_id).first()
@@ -521,13 +557,16 @@ def delete_employee(employee_id: int, deleted_by_id: int, db: Session = Depends(
 @router.get("/inventory")
 def list_inventory(
     store_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[CurrentUser] = Depends(get_current_user)
 ):
     query = db.query(DrugInventory).filter(
         DrugInventory.status == 'ACTIVE',
         DrugInventory.quantity > 0
     )
-    if store_id:
+    if current_user and current_user.role != 'OWNER':
+        query = query.filter(DrugInventory.store_id == current_user.store_id)
+    elif store_id:
         query = query.filter(DrugInventory.store_id == store_id)
     
     items = query.order_by(DrugInventory.expiry_date.asc()).all()
@@ -653,48 +692,84 @@ def create_price(request: DrugPriceCreate, db: Session = Depends(get_db)):
 # DASHBOARD
 # =====================================================
 @router.get("/dashboard")
-def get_dashboard(db: Session = Depends(get_db)):
+def get_dashboard(db: Session = Depends(get_db), current_user: Optional[CurrentUser] = Depends(get_current_user)):
     """Tổng quan hệ thống"""
     from sqlalchemy import func
+    from app.models import Order
+    from datetime import timedelta
     
     total_drugs = db.query(GenericDrug).count()
     total_brands = db.query(BrandDrug).filter(BrandDrug.is_active == True).count()
-    total_stores = db.query(Store).filter(Store.is_active == True).count()
-    total_employees = db.query(Employee).filter(Employee.is_active == True).count()
-    total_customers = db.query(Customer).count()
     
-    # Tồn kho
-    total_stock = db.query(func.sum(DrugInventory.quantity)).filter(
-        DrugInventory.status == 'ACTIVE',
-        DrugInventory.quantity > 0,
-        DrugInventory.expiry_date > date.today()
-    ).scalar() or 0
-    
-    # Thuốc hết hạn
-    expired_count = db.query(DrugInventory).filter(
-        DrugInventory.status == 'ACTIVE',
-        DrugInventory.quantity > 0,
-        DrugInventory.expiry_date <= date.today()
-    ).count()
-    
-    # Thuốc sắp hết hạn (30 ngày)
-    from datetime import timedelta
-    expiring_count = db.query(DrugInventory).filter(
-        DrugInventory.status == 'ACTIVE',
-        DrugInventory.quantity > 0,
-        DrugInventory.expiry_date > date.today(),
-        DrugInventory.expiry_date <= date.today() + timedelta(days=30)
-    ).count()
-    
-    # Đơn hàng hôm nay
-    from app.models import Order
-    today_orders = db.query(Order).filter(
-        func.date(Order.order_date) == date.today()
-    ).count()
-    
-    total_revenue = db.query(func.sum(Order.final_amount)).filter(
-        Order.status == 'COMPLETED'
-    ).scalar() or 0
+    if current_user and current_user.role != 'OWNER':
+        total_stores = 1
+        total_employees = db.query(Employee).filter(Employee.is_active == True, Employee.store_id == current_user.store_id).count()
+        
+        # Customers that have ordered from this store
+        total_customers = db.query(Order.customer_id).filter(Order.store_id == current_user.store_id, Order.customer_id != None).distinct().count()
+        
+        total_stock = db.query(func.sum(DrugInventory.quantity)).filter(
+            DrugInventory.status == 'ACTIVE',
+            DrugInventory.quantity > 0,
+            DrugInventory.expiry_date > date.today(),
+            DrugInventory.store_id == current_user.store_id
+        ).scalar() or 0
+        
+        expired_count = db.query(DrugInventory).filter(
+            DrugInventory.status == 'ACTIVE',
+            DrugInventory.quantity > 0,
+            DrugInventory.expiry_date <= date.today(),
+            DrugInventory.store_id == current_user.store_id
+        ).count()
+        
+        expiring_count = db.query(DrugInventory).filter(
+            DrugInventory.status == 'ACTIVE',
+            DrugInventory.quantity > 0,
+            DrugInventory.expiry_date > date.today(),
+            DrugInventory.expiry_date <= date.today() + timedelta(days=30),
+            DrugInventory.store_id == current_user.store_id
+        ).count()
+        
+        today_orders = db.query(Order).filter(
+            func.date(Order.order_date) == date.today(),
+            Order.store_id == current_user.store_id
+        ).count()
+        
+        total_revenue = db.query(func.sum(Order.final_amount)).filter(
+            Order.status == 'COMPLETED',
+            Order.store_id == current_user.store_id
+        ).scalar() or 0
+    else:
+        total_stores = db.query(Store).filter(Store.is_active == True).count()
+        total_employees = db.query(Employee).filter(Employee.is_active == True).count()
+        total_customers = db.query(Customer).count()
+        
+        total_stock = db.query(func.sum(DrugInventory.quantity)).filter(
+            DrugInventory.status == 'ACTIVE',
+            DrugInventory.quantity > 0,
+            DrugInventory.expiry_date > date.today()
+        ).scalar() or 0
+        
+        expired_count = db.query(DrugInventory).filter(
+            DrugInventory.status == 'ACTIVE',
+            DrugInventory.quantity > 0,
+            DrugInventory.expiry_date <= date.today()
+        ).count()
+        
+        expiring_count = db.query(DrugInventory).filter(
+            DrugInventory.status == 'ACTIVE',
+            DrugInventory.quantity > 0,
+            DrugInventory.expiry_date > date.today(),
+            DrugInventory.expiry_date <= date.today() + timedelta(days=30)
+        ).count()
+        
+        today_orders = db.query(Order).filter(
+            func.date(Order.order_date) == date.today()
+        ).count()
+        
+        total_revenue = db.query(func.sum(Order.final_amount)).filter(
+            Order.status == 'COMPLETED'
+        ).scalar() or 0
     
     return {
         "total_generic_drugs": total_drugs,

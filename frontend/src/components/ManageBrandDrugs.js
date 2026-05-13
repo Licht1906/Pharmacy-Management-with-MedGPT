@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, Select, message, Space, Tag } from 'antd';
-import { PlusOutlined, EditOutlined, DatabaseOutlined } from '@ant-design/icons';
-import { getBrandDrugs, createBrandDrug, getGenericDrugs, getManufacturers } from '../services/api';
+import { Table, Button, Modal, Form, Input, Select, message, Space, Tag, Upload, Image, Popconfirm } from 'antd';
+import { PlusOutlined, EditOutlined, DatabaseOutlined, UploadOutlined, DeleteOutlined } from '@ant-design/icons';
+import { getBrandDrugs, createBrandDrug, updateBrandDrug, deleteBrandDrug, getGenericDrugs, getManufacturers, uploadImage } from '../services/api';
 
 const ManageBrandDrugs = () => {
     const [data, setData] = useState([]);
@@ -9,6 +9,8 @@ const ManageBrandDrugs = () => {
     const [manufacturers, setManufacturers] = useState([]);
     const [loading, setLoading] = useState(false);
     const [modalOpen, setModalOpen] = useState(false);
+    const [editingId, setEditingId] = useState(null);
+    const [imageUrl, setImageUrl] = useState(null);
     const [form] = Form.useForm();
 
     const fetchData = async () => {
@@ -28,9 +30,16 @@ const ManageBrandDrugs = () => {
 
     const handleSubmit = async (values) => {
         try {
-            await createBrandDrug(values);
-            message.success('Đã thêm biệt dược');
+            if (editingId) {
+                await updateBrandDrug(editingId, values);
+                message.success('Đã cập nhật biệt dược');
+            } else {
+                await createBrandDrug(values);
+                message.success('Đã thêm biệt dược');
+            }
             setModalOpen(false);
+            setEditingId(null);
+            setImageUrl(null);
             form.resetFields();
             fetchData();
         } catch (e) {
@@ -38,7 +47,28 @@ const ManageBrandDrugs = () => {
         }
     };
 
+    const handleEdit = (record) => {
+        setEditingId(record.brand_drug_id);
+        form.setFieldsValue(record);
+        setImageUrl(record.image_url);
+        setModalOpen(true);
+    };
+
+    const handleDelete = async (id) => {
+        try {
+            await deleteBrandDrug(id);
+            message.success('Đã xóa biệt dược');
+            fetchData();
+        } catch (e) {
+            message.error('Lỗi khi xóa: ' + (e.response?.data?.detail || e.message));
+        }
+    };
+
     const columns = [
+        {
+            title: 'Ảnh', dataIndex: 'image_url',
+            render: (url) => (url && url !== "null" && url !== "None") ? <Image width={50} src={`http://localhost:8000${url}`} /> : '-'
+        },
         {
             title: 'Mã thuốc', dataIndex: 'drug_code',
             render: (v) => <code style={{ color: '#722ed1', background: '#f9f0ff', padding: '2px 6px', borderRadius: 4 }}>{v}</code>
@@ -54,21 +84,76 @@ const ManageBrandDrugs = () => {
             render: (v) => v ? <b style={{ color: '#f5222d' }}>{v.toLocaleString()}đ</b> : '-'
         },
         { title: 'Đóng gói', dataIndex: 'packaging', ellipsis: true },
+        {
+            title: 'Hành động',
+            key: 'action',
+            render: (_, record) => (
+                <Space>
+                    <Button icon={<EditOutlined />} onClick={() => handleEdit(record)} />
+                    <Popconfirm title="Xóa thuốc này?" onConfirm={() => handleDelete(record.brand_drug_id)}>
+                        <Button danger icon={<DeleteOutlined />} />
+                    </Popconfirm>
+                </Space>
+            )
+        }
     ];
 
     return (
         <div style={{ padding: 24 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
                 <h2><DatabaseOutlined /> Quản Lý Biệt Dược</h2>
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>Thêm biệt dược</Button>
+                <Button type="primary" icon={<PlusOutlined />} onClick={() => {
+                    form.resetFields();
+                    setEditingId(null);
+                    setImageUrl(null);
+                    setModalOpen(true);
+                }}>Thêm biệt dược</Button>
             </div>
 
             <Table columns={columns} dataSource={data} loading={loading}
                 rowKey="brand_drug_id" pagination={{ pageSize: 10 }} />
 
-            <Modal title="Thêm biệt dược" open={modalOpen}
-                onCancel={() => setModalOpen(false)} onOk={() => form.submit()} width={600}>
+            <Modal title={editingId ? "Sửa biệt dược" : "Thêm biệt dược"} open={modalOpen}
+                onCancel={() => {
+                    setModalOpen(false);
+                    setEditingId(null);
+                    setImageUrl(null);
+                }} onOk={() => form.submit()} width={600}>
                 <Form form={form} onFinish={handleSubmit} layout="vertical">
+                    <Form.Item label="Ảnh thuốc" valuePropName="fileList" getValueFromEvent={(e) => {
+                        if (Array.isArray(e)) return e;
+                        return e && e.fileList;
+                    }}>
+                        <Upload
+                            name="file"
+                            listType="picture-card"
+                            showUploadList={false}
+                            customRequest={async (options) => {
+                                const { file, onSuccess, onError } = options;
+                                try {
+                                    const res = await uploadImage(file);
+                                    setImageUrl(res.image_url);
+                                    form.setFieldsValue({ image_url: res.image_url });
+                                    onSuccess("Ok");
+                                    message.success('Tải ảnh lên thành công');
+                                } catch (e) {
+                                    onError(e);
+                                    message.error('Lỗi tải ảnh');
+                                }
+                            }}
+                        >
+                            {imageUrl ? (
+                                <img src={`http://localhost:8000${imageUrl}`} alt="avatar" style={{ width: '100%' }} />
+                            ) : (
+                                <div>
+                                    <UploadOutlined />
+                                    <div style={{ marginTop: 8 }}>Tải ảnh</div>
+                                </div>
+                            )}
+                        </Upload>
+                    </Form.Item>
+                    <Form.Item name="image_url" hidden><Input /></Form.Item>
+                    
                     <Form.Item name="drug_code" label="Mã thuốc" rules={[{ required: true }]}>
                         <Input placeholder="VD: ANP-PAR-TAB-500MG-GSK-002" />
                     </Form.Item>

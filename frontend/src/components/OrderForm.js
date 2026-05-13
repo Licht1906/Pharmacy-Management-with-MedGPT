@@ -17,9 +17,16 @@ const OrderForm = () => {
     const [submitting, setSubmitting] = useState(false);
     const [orderResult, setOrderResult] = useState(null);
     const [stores, setStores] = useState([]);
+    
+    const saved = localStorage.getItem('pharmacy_user');
+    const user = saved ? JSON.parse(saved) : null;
+    const isOwner = user?.role === 'OWNER';
 
     // Fetch stores on component mount
     useEffect(() => {
+        if (!isOwner && user?.store_id) {
+            form.setFieldsValue({ store_id: user.store_id });
+        }
         const fetchStores = async () => {
             try {
                 const result = await getStores();
@@ -29,6 +36,7 @@ const OrderForm = () => {
             }
         };
         fetchStores();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Tìm thuốc
@@ -187,16 +195,22 @@ const OrderForm = () => {
                         <Form.Item label="SĐT" name="customer_phone">
                             <Input placeholder="VD: 0901234567" />
                         </Form.Item>
-                        <Form.Item label="Cửa hàng" name="store_id"
-                            rules={[{ required: true, message: 'Chọn cửa hàng' }]}>
-                            <Select placeholder="Chọn cửa hàng" showSearch optionFilterProp="children">
-                                {stores.map(s => (
-                                <Select.Option key={s.store_id} value={s.store_id}>
-                                    {s.store_name}
-                                </Select.Option>
-                                ))}
-                            </Select>
-                        </Form.Item>
+                        {isOwner ? (
+                            <Form.Item label="Cửa hàng" name="store_id"
+                                rules={[{ required: true, message: 'Chọn cửa hàng' }]}>
+                                <Select placeholder="Chọn cửa hàng" showSearch optionFilterProp="children">
+                                    {stores.map(s => (
+                                    <Select.Option key={s.store_id} value={s.store_id}>
+                                        {s.store_name}
+                                    </Select.Option>
+                                    ))}
+                                </Select>
+                            </Form.Item>
+                        ) : (
+                            <Form.Item name="store_id" hidden>
+                                <Input />
+                            </Form.Item>
+                        )}
                         <Form.Item label="Ghi chú" name="notes">
                             <Input.TextArea rows={2} />
                         </Form.Item>

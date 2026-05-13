@@ -14,6 +14,16 @@ const ManageInventory = () => {
     const [storeFilter, setStoreFilter] = useState(null);
     const [activeTab, setActiveTab] = useState('drugs');
     const [form] = Form.useForm();
+    
+    const saved = localStorage.getItem('pharmacy_user');
+    const user = saved ? JSON.parse(saved) : null;
+    const isOwner = user?.role === 'OWNER';
+
+    useEffect(() => {
+        if (!isOwner && user?.store_id) {
+            setStoreFilter(user.store_id);
+        }
+    }, [isOwner, user]);
 
     const fetchData = async () => {
         setLoading(true);
@@ -31,7 +41,10 @@ const ManageInventory = () => {
         setLoading(false);
     };
 
-    useEffect(() => { fetchData(); }, [storeFilter]);
+    useEffect(() => { 
+        fetchData(); 
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [storeFilter]);
 
     const handleSubmit = async (values) => {
         try {
@@ -100,10 +113,15 @@ const ManageInventory = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
                 <h2><InboxOutlined /> Quản Lý Tồn Kho</h2>
                 <div style={{ display: 'flex', gap: 8 }}>
-                    <Select placeholder="Tất cả cửa hàng" allowClear onChange={setStoreFilter} style={{ width: 250 }}>
-                        {stores.map(s => <Select.Option key={s.store_id} value={s.store_id}>{s.store_code} - {s.store_name}</Select.Option>)}
-                    </Select>
-                    <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>Nhập kho</Button>
+                    {isOwner && (
+                        <Select placeholder="Tất cả cửa hàng" allowClear onChange={setStoreFilter} style={{ width: 250 }}>
+                            {stores.map(s => <Select.Option key={s.store_id} value={s.store_id}>{s.store_code} - {s.store_name}</Select.Option>)}
+                        </Select>
+                    )}
+                    <Button type="primary" icon={<PlusOutlined />} onClick={() => {
+                        setModalOpen(true);
+                        if (!isOwner) form.setFieldsValue({ store_id: user?.store_id });
+                    }}>Nhập kho</Button>
                 </div>
             </div>
 
@@ -142,11 +160,17 @@ const ManageInventory = () => {
                             </Select>
                         </Form.Item>
                     )}
-                    <Form.Item name="store_id" label="Cửa hàng" rules={[{ required: true }]}>
-                        <Select placeholder="Chọn cửa hàng">
-                            {stores.map(s => <Select.Option key={s.store_id} value={s.store_id}>{s.store_code} - {s.store_name}</Select.Option>)}
-                        </Select>
-                    </Form.Item>
+                    {isOwner ? (
+                        <Form.Item name="store_id" label="Cửa hàng" rules={[{ required: true }]}>
+                            <Select placeholder="Chọn cửa hàng">
+                                {stores.map(s => <Select.Option key={s.store_id} value={s.store_id}>{s.store_code} - {s.store_name}</Select.Option>)}
+                            </Select>
+                        </Form.Item>
+                    ) : (
+                        <Form.Item name="store_id" hidden>
+                            <Input />
+                        </Form.Item>
+                    )}
                     <Form.Item name="batch_number" label="Số lô" rules={[{ required: true }]}>
                         <Input placeholder="VD: PAN-2025-001" />
                     </Form.Item>

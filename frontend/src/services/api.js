@@ -5,6 +5,19 @@ const API = axios.create({
     timeout: 30000,
 });
 
+API.interceptors.request.use((config) => {
+    const saved = localStorage.getItem('pharmacy_user');
+    if (saved) {
+        const user = JSON.parse(saved);
+        config.headers['X-Role'] = user.role;
+        config.headers['X-Store-ID'] = user.store_id;
+        config.headers['X-Employee-ID'] = user.employee_id;
+    }
+    return config;
+}, (error) => {
+    return Promise.reject(error);
+});
+
 // MedGPT Chat API
 
 export const chatWithMedGPT = async (message, sessionId = 'default') => {
@@ -110,6 +123,26 @@ export const getBrandDrugs = async () => {
 };
 export const createBrandDrug = async (data) => {
     const response = await API.post('/manage/brand-drugs', data);
+    return response.data;
+};
+export const updateBrandDrug = async (id, data) => {
+    const response = await API.put(`/manage/brand-drugs/${id}`, data);
+    return response.data;
+};
+export const deleteBrandDrug = async (id) => {
+    const response = await API.delete(`/manage/brand-drugs/${id}`);
+    return response.data;
+};
+
+// Upload Image
+export const uploadImage = async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await API.post('/manage/upload-image', formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data',
+        },
+    });
     return response.data;
 };
 

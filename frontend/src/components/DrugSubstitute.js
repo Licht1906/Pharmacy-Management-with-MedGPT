@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Input, Card, Row, Col, Typography, Button, Spin, Empty, Result, Badge } from 'antd';
-import { SwapOutlined, SearchOutlined, UnorderedListOutlined, BarChartOutlined } from '@ant-design/icons';
+import { Input, Card, Row, Col, Typography, Spin, Empty, Result, Badge, Tag } from 'antd';
+import { SwapOutlined, SearchOutlined } from '@ant-design/icons';
 import { findSubstitutes } from '../services/api';
 
 const { Title, Text } = Typography;
@@ -30,8 +30,10 @@ const DrugSubstitute = () => {
                         sub.brands.forEach(brand => {
                             allBrands.push({
                                 ...brand,
+                                stock_by_store: brand.stock_by_store || [],
                                 substitute_info: {
                                     generic_name: sub.generic_name,
+                                    group: sub.group,
                                     usage: sub.usage,
                                     dosage_guide: sub.dosage_guide,
                                     side_effects: sub.side_effects,
@@ -56,21 +58,40 @@ const DrugSubstitute = () => {
         setLoading(false);
     };
 
-    const renderImagePlaceholder = (size = 80) => (
-        <div style={{
-            width: size,
-            height: size,
-            backgroundColor: '#ddd',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            border: '2px solid #bbb',
-            position: 'relative'
-        }}>
-            <div style={{ position: 'absolute', width: '100%', height: '2px', backgroundColor: '#bbb', transform: 'rotate(45deg)' }}></div>
-            <div style={{ position: 'absolute', width: '100%', height: '2px', backgroundColor: '#bbb', transform: 'rotate(-45deg)' }}></div>
-        </div>
-    );
+    const renderImagePlaceholder = (size = 80, url = null) => {
+        if (url && url !== "null" && url !== "None") {
+            return (
+                <div style={{
+                    width: size,
+                    height: size,
+                    border: '1px solid #ddd',
+                    borderRadius: 4,
+                    overflow: 'hidden',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: '#fff'
+                }}>
+                    <img src={`http://localhost:8000${url}`} alt="drug" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                </div>
+            );
+        }
+        return (
+            <div style={{
+                width: size,
+                height: size,
+                backgroundColor: '#ddd',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: '2px solid #bbb',
+                position: 'relative'
+            }}>
+                <div style={{ position: 'absolute', width: '100%', height: '2px', backgroundColor: '#bbb', transform: 'rotate(45deg)' }}></div>
+                <div style={{ position: 'absolute', width: '100%', height: '2px', backgroundColor: '#bbb', transform: 'rotate(-45deg)' }}></div>
+            </div>
+        );
+    };
 
     return (
         <div style={{ padding: 24, height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -123,7 +144,7 @@ const DrugSubstitute = () => {
                                         }}
                                         bodyStyle={{ padding: 12, display: 'flex', alignItems: 'center' }}
                                     >
-                                        {renderImagePlaceholder(80)}
+                                        {renderImagePlaceholder(80, brand.image_url)}
                                         <div style={{ marginLeft: 16, flex: 1 }}>
                                             <div style={{ fontWeight: 'bold', fontSize: 16 }}>{brand.brand_name}</div>
                                             <div style={{ color: '#666', fontSize: 13 }}>Hàm lượng: {brand.strength}</div>
@@ -151,21 +172,39 @@ const DrugSubstitute = () => {
                             {selectedBrand ? (
                                 <>
                                     <div style={{ display: 'flex', alignItems: 'flex-start', marginBottom: 24, marginTop: 24 }}>
-                                        {renderImagePlaceholder(100)}
+                                        {renderImagePlaceholder(100, selectedBrand.image_url)}
                                         <div style={{ marginLeft: 16 }}>
                                             <Title level={4} style={{ margin: 0 }}>{selectedBrand.brand_name}</Title>
                                             <p style={{ margin: '4px 0', color: '#666' }}>Hàm lượng: {selectedBrand.strength}</p>
                                             <p style={{ margin: '4px 0', color: '#666' }}>Dạng: {selectedBrand.dosage_form}</p>
                                             <Badge status={selectedBrand.stock > 0 ? "success" : "error"} />
                                             <Text type={selectedBrand.stock > 0 ? "success" : "danger"} style={{ marginLeft: 8 }}>
-                                                Tồn kho: {selectedBrand.stock}
+                                                Tổng tồn kho: {selectedBrand.stock}
                                             </Text>
+                                            
+                                            {selectedBrand.stock_by_store && selectedBrand.stock_by_store.length > 0 && (
+                                                <div style={{ marginTop: 8, padding: 8, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #f0f0f0' }}>
+                                                    <Text strong style={{ fontSize: 13 }}>Tồn kho chi tiết:</Text>
+                                                    <ul style={{ paddingLeft: 20, margin: '4px 0 0 0', color: '#555', fontSize: 13 }}>
+                                                        {selectedBrand.stock_by_store.map((s, idx) => (
+                                                            <li key={idx}>
+                                                                <Text strong>{s.store}</Text>: <Text type={s.quantity > 0 ? "success" : "danger"}>{s.quantity}</Text>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
                                     <div style={{ marginBottom: 16 }}>
                                         <Text strong>Hoạt chất gốc:</Text>
-                                        <p style={{ marginTop: 4, marginBottom: 0 }}>{selectedBrand.substitute_info.generic_name}</p>
+                                        <p style={{ marginTop: 4, marginBottom: 0 }}>
+                                            {selectedBrand.substitute_info.generic_name}
+                                            {selectedBrand.substitute_info.group && (
+                                                <Tag color="blue" style={{ marginLeft: 8 }}>{selectedBrand.substitute_info.group}</Tag>
+                                            )}
+                                        </p>
                                     </div>
 
                                     <div style={{ marginBottom: 16 }}>
